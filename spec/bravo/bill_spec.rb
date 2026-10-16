@@ -2,6 +2,14 @@
 require 'spec_helper'
 
 describe 'Bill' do
+  # Offline by default: only examples tagged :network talk to AFIP.
+  before do |example|
+    unless example.metadata[:network]
+      Savon.stub(:client).and_return(double('client'))
+      Bravo::AuthData.stub(:auth_hash).and_return('Token' => 't', 'Sign' => 's', 'Cuit' => Bravo.cuit)
+    end
+  end
+
   let(:bill) { @bill = Bravo::Bill.new(iva_condition: :consumidor_final, invoice_type: :invoice) }
 
   describe '.header' do
@@ -16,9 +24,7 @@ describe 'Bill' do
 
   describe '.initialize' do
     it 'applies Bravos defaults' do
-      bill.client.class.name.should == 'Savon::Client'
-
-      ['Token', 'Sign', 'Cuit'].each do |key|
+            ['Token', 'Sign', 'Cuit'].each do |key|
         bill.body['Auth'][key].should_not == nil
       end
 
@@ -54,7 +60,7 @@ describe 'Bill' do
     end
   end
 
-  describe '#setup_bill' do
+  describe '#setup_bill', :network do
     before do
       bill.net        = 100
       bill.aliciva_id = 2
@@ -88,7 +94,7 @@ describe 'Bill' do
     end
   end
 
-  describe '#authorize' do
+  describe '#authorize', :network do
     describe 'for facturas' do
       Bravo::BILL_TYPE[Bravo.own_iva_cond].keys.each do |target_iva_cond|
         describe "issued to #{ target_iva_cond.to_s }" do
@@ -115,5 +121,83 @@ describe 'Bill' do
         end
       end
     end
+  end
+end
+
+describe 'Bill type C (monotributo)' do
+  let(:bill) do
+    Bravo::Bill.new(iva_condition: :consumidor_final, invoice_type: :invoice,
+                    net: 100, document_type: 'DNI')
+  end
+
+  let(:detail) { bill.body['FeCAEReq']['FeDetReq']['FECAEDetRequest'] }
+
+  before do
+    Savon.stub(:client).and_return(double('client'))
+    Bravo::AuthData.stub(:auth_hash).and_return('Token' => 't', 'Sign' => 's', 'Cuit' => Bravo.cuit)
+    @previous_cond = Bravo.own_iva_cond
+    Bravo.own_iva_cond = :responsable_monotributo
+    Bravo::Reference.stub(:next_bill_number).and_return(1)
+    bill.document_number = '28774003'
+    bill.concept = 'Servicios'
+  end
+
+  after { Bravo.own_iva_cond = @previous_cond }
+
+  describe '#bill_type' do
+    { invoice: '11', debit: '12', credit: '13' }.each do |type, code|
+      it "returns #{ code } for #{ type }" do
+        bill.invoice_type = type
+        bill.bill_type.should == code
+      end
+    end
+
+    it 'is C whoever the buyer is' do
+      Bravo::BILL_TYPE[:responsable_monotributo].keys.each do |buyer|
+        bill.iva_condition = buyer
+        bill.bill_type.should == '11'
+      end
+    end
+  end
+
+  describe '#iva_sum and #total' do
+    it 'does not add IVA to the net' do
+      bill.net = 100.89
+      bill.iva_sum.should == 0
+      bill.total.should == 100.89
+    end
+  end
+
+  describe '#setup_bill' do
+    before { bill.setup_bill }
+
+    it 'does not include the Iva node' do
+      detail.has_key?('Iva').should == false
+    end
+
+    it 'reports no IVA and a total equal to the net' do
+      detail['ImpIVA'].should   == 0
+      detail['ImpNeto'].should  == 100.0
+      detail['ImpTotal'].should == 100
+    end
+
+    it 'issues a Factura C' do
+      bill.body['FeCAEReq']['FeCabReq']['CbteTipo'].should == '11'
+    end
+
+    it 'sends the receiver IVA condition' do
+      detail['CondicionIVAReceptorId'].should == 5
+    end
+  end
+end
+
+describe 'Bill CondicionIVAReceptorId' do
+  it 'is sent for facturas A' do
+    Savon.stub(:client).and_return(double('client'))
+    Bravo::AuthData.stub(:auth_hash).and_return('Token' => 't', 'Sign' => 's', 'Cuit' => Bravo.cuit)
+    Bravo::Reference.stub(:next_bill_number).and_return(1)
+    bill = Bravo::Bill.new(iva_condition: :responsable_inscripto, invoice_type: :invoice, net: 100)
+    bill.setup_bill
+    bill.body['FeCAEReq']['FeDetReq']['FECAEDetRequest']['CondicionIVAReceptorId'].should == 1
   end
 end

@@ -1,8 +1,6 @@
 # Bravo
 [![Gem Version](https://badge.fury.io/rb/bravo.png)](http://badge.fury.io/rb/bravo)
-![Travis status](https://travis-ci.org/leanucci/bravo.png)
-[![Code Climate](https://codeclimate.com/github/leanucci/bravo/badges/gpa.svg)](https://codeclimate.com/github/leanucci/bravo)
-[![Test Coverage](https://codeclimate.com/github/leanucci/bravo/badges/coverage.svg)](https://codeclimate.com/github/leanucci/bravo/coverage)
+[![CI](https://github.com/gcourault/bravo-c/actions/workflows/ci.yml/badge.svg)](https://github.com/gcourault/bravo-c/actions)
 
 [~~Bravo~~](http://images.coveralia.com/audio/b/Bravo-Desierto_Sin_Amor-Frontal.jpg) Bravo permite la obtenci&oacute;n del [~~C.A.E~~](http://www.muevamueva.com/masmusica/latina/cae/images/fotos.5.gif) C.A.E. (C&oacute;digo de Autorizaci&oacute;n Electr&oacute;nico) por medio del Web Service de Facturaci&oacute;n Electr&oacute;nica provisto por AFIP.
 
@@ -19,17 +17,13 @@ Para poder autorizar comprobantes mediante el WSFE, AFIP requiere de ciertos pas
 
 ### OpenSSL
 
-Para cumplir con los requisitos de encriptación del [Web Service de Autenticación y Autorización](http://www.afip.gov.ar/ws/WSAA/README.txt) (WSAA), Bravo requiere [OpenSSL](http://openssl.org) en cualquier versión posterior a la 1.0.0a.
-
-Como regla general, basta correr desde la línea de comandos ```openssl cms```
-
-Si el comando ```cms``` no está disponible, se debe actualizar OpenSSL.
+Bravo firma el pedido de acceso al [WSAA](http://www.afip.gov.ar/ws/WSAA/README.txt) con la librería OpenSSL de Ruby, por lo que ya no necesita el binario `openssl` ni la opción `openssl_bin` (que se ignora si está configurada).
 
 ### Certificados
 
 AFIP exige para acceder a sus Web Services, la utilización del WSAA. Este servicio se encarga de la autorización y autenticación de cada request hecho al web service.
 
-Una vez instalada la version correcta de OpenSSL, podemos generar la clave privada y el CSR.
+Podemos generar la clave privada (RSA 2048) y el CSR con `bin/bravo gencsr --sn SERVIDOR --cn EMPRESA --cuit 20876543217`.
 
 * [Documentación WSAA](http://www.afip.gov.ar/ws/WSAA/Especificacion_Tecnica_WSAA_1.2.0.pdf)
 * [Cómo generar el CSR](https://gist.github.com/leanucci/7520622)
@@ -49,7 +43,6 @@ Bravo no asume valores por defecto, por lo cual hay que configurar de forma expl
 * ```sale_point``` el punto de venta a utilizar (ante la duda consulte a su contador)
 * ```default_concepto, default_documento y default_moneda``` estos valores pueden configurarse para no tener que pasarlos cada vez que emitamos un comprobante, ya que no suelen cambiar entre comprobantes emitidos por el mismo vendedor.
 * ```own_iva_cond``` condicion propia ante el IVA
-* ```openssl_bin``` path al ejecutable de OpenSSL
 
 
 Ejemplo de configuración tomado del spec_helper de Bravo:
@@ -66,7 +59,6 @@ Ejemplo de configuración tomado del spec_helper de Bravo:
 		Bravo.default_moneda    			 = :peso
 		Bravo.own_iva_cond      			 = :responsable_inscripto
 		Bravo.verbose           			 = 'true'
-		Bravo.openssl_bin       			 = '/usr/local/Cellar/openssl/1.0.1e/bin/openssl'
 		Bravo::AuthData.environment			 = :test
 
 ### Emisión de comprobantes

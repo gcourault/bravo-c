@@ -66,20 +66,31 @@ module Bravo
   #
   APPLICABLE_IVA = {
     :responsable_inscripto => {
-      responsable_inscripto: 02,
-      consumidor_final: 00,
-      exento: 00,
-      responsable_monotributo: 00
+      responsable_inscripto: 2,
+      consumidor_final: 0,
+      exento: 0,
+      responsable_monotributo: 0
     },
 
+    # Monotributistas issue type C invoices, which never itemize IVA
+    # (the `Iva` node must not be sent to WSFE).
     :responsable_monotributo => {
-      responsable_inscripto: 00,
-      consumidor_final: 00,
-      exento: 00,
-      responsable_monotributo: 00
+      responsable_inscripto: nil,
+      consumidor_final: nil,
+      exento: nil,
+      responsable_monotributo: nil
     }
 
   }
+
+  # Buyer's IVA condition codes, as listed by WSFE's FEParamGetCondicionIvaReceptor.
+  # Required in every invoice since RG 5616.
+  #
+  CONDICION_IVA_RECEPTOR = {
+    :responsable_inscripto    => 1,
+    :exento                   => 4,
+    :consumidor_final         => 5,
+    :responsable_monotributo  => 6 }
 
   # This hash keeps the codes for A document types by operation
   #
@@ -95,6 +106,8 @@ module Bravo
     :debit   => '07',
     :credit  => '08' }
 
+  # This hash keeps the codes for C document types by operation
+  #
   BILL_TYPE_C = {
     :invoice => '11',
     :debit   => '12',

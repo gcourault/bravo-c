@@ -2,6 +2,8 @@
 # -*- encoding: utf-8 -*-
 
 require 'thor'
+require 'openssl'
+require 'fileutils'
 
 module Bravo
   # Bravo executable for certificate request generation
@@ -9,7 +11,6 @@ module Bravo
   class Bravo < Thor
 
     desc 'gencsr', 'Crea el Certificate Signature Request'
-    method_option :bin,  type: :string, required: true, desc: 'El path completo al binario de openssl'
     method_option :pkey, type: :string, desc: 'Path a una clave privada preexistente. Si se omite, se crea una clave en --out'
     method_option :sn,   type: :string, required: true, desc: 'Nombre del servidor. Sin uso práctico, es requerido por AFIP'
     method_option :cn,   type: :string, required: true, desc: 'Nombre de la compañía. Sin uso práctico, es requerido por AFIP'
@@ -18,40 +19,47 @@ module Bravo
 
     # Certificate Signature Request wrapper for bravo.
     #
-    # @param bin [Sting] the path for `openssl` binary. Required.
     # @param pkey [String] path for an existing private key. If ommitted, a new one will be generated in --out
     #
     def gencsr
-      bin   = options[:bin]
       sn    = options[:sn]
       cn    = options[:cn]
       cuit  = options[:cuit]
       out   = options[:out]
 
-      Dir.mkdir(out) unless File.exists?(out)
+      FileUtils.mkdir_p(out)
 
-      out_path = "#{ Dir.pwd }/#{ out }/"
+      out_path = File.join(Dir.pwd, out)
 
-      pkey  = options[:pkey] || create_pkey(bin, out_path)
+      key = if options[:pkey]
+              OpenSSL::PKey.read(File.read(options[:pkey]))
+            else
+              create_pkey(out_path)
+            end
 
       say("Creando CSR en #{ out_path } con CUIT=#{ cuit }, o=#{ sn } y cn=#{ cn }", :cyan)
 
-      `#{bin} req -new \
-                  -key #{ pkey } \
-                  -subj "/C=AR/O=#{ sn }/CN=#{ cn }/serialNumber=CUIT #{ cuit }"\
-                  -out #{ out_path }pedido-#{ cuit }`
+      csr = OpenSSL::X509::Request.new
+      csr.version = 0
+      csr.subject = OpenSSL::X509::Name.new([['C', 'AR'], ['O', sn], ['CN', cn],
+                                             ['serialNumber', "CUIT #{ cuit }"]])
+      csr.public_key = key.public_key
+      csr.sign(key, OpenSSL::Digest::SHA256.new)
+
+      File.write(File.join(out_path, "pedido-#{ cuit }"), csr.to_pem)
 
       say('Hecho!', :green)
     end
 
     protected
-    # Creates a new private key
+    # Creates a new 2048 bits private key
     #
-    def create_pkey(bin,out_path)
+    def create_pkey(out_path)
       say('Creando pkey', :cyan)
-      `#{ bin } genrsa -out #{ out_path }pkey 1024`
-      say('Hecho!\n\n', :green)
-      "#{ out_path }pkey"
+      key = OpenSSL::PKey::RSA.new(2048)
+      File.write(File.join(out_path, 'pkey'), key.to_pem, perm: 0600)
+      say("Hecho!\n\n", :green)
+      key
     end
   end
 

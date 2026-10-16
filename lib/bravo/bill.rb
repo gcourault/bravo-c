@@ -48,6 +48,7 @@ module Bravo
     # TODO: fix this
     #
     def iva_sum
+      return 0 unless itemizes_iva?
       @iva_sum = net * applicable_iva_multiplier
       @iva_sum.round(2)
     end
@@ -82,15 +83,18 @@ module Bravo
                         'ImpTotConc'  => 0.00,
                         'MonId'       => Bravo::MONEDAS[currency][:codigo],
                         'MonCotiz'    => 1,
+                        'CondicionIVAReceptorId' => Bravo::CONDICION_IVA_RECEPTOR[iva_condition],
                         'ImpOpEx'     => 0.00,
-                        'ImpTrib'     => 0.00,
-                        'Iva'         => {
-                          'AlicIva' => {
-                            'Id' => applicable_iva_code,
-                            'BaseImp' => net.round(2),
-                            'Importe' => iva_sum } } } } } }
+                        'ImpTrib'     => 0.00 } } } }
 
       detail = fecaereq['FeCAEReq']['FeDetReq']['FECAEDetRequest']
+
+      # Type C invoices must not include the Iva node
+      if itemizes_iva?
+        detail['Iva'] = { 'AlicIva' => { 'Id'      => applicable_iva_code,
+                                         'BaseImp' => net.round(2),
+                                         'Importe' => iva_sum } }
+      end
 
       detail['DocNro']    = document_number
       detail['ImpNeto']   = net.to_f
@@ -140,9 +144,9 @@ module Bravo
       request_header  = body['FeCAEReq']['FeCabReq'].underscore_keys.symbolize_keys
       request_detail  = body['FeCAEReq']['FeDetReq']['FECAEDetRequest'].underscore_keys.symbolize_keys
 
-      iva             = request_detail.delete(:iva)['AlicIva'].underscore_keys.symbolize_keys
-
-      request_detail.merge!(iva)
+      if (iva = request_detail.delete(:iva))
+        request_detail.merge!(iva['AlicIva'].underscore_keys.symbolize_keys)
+      end
 
       response_hash = { :header_result => response_header.delete(:resultado),
                         :authorized_on => response_header.delete(:fch_proceso),
@@ -162,9 +166,14 @@ module Bravo
       self.response = (defined?(Struct::Response) ? Struct::Response : Struct.new('Response', *keys)).new(*values)
     end
 
+    # Type C invoices (issued by monotributistas) don't itemize IVA.
+    def itemizes_iva?
+      !applicable_iva.nil?
+    end
+
     def applicable_iva
       index = Bravo::APPLICABLE_IVA[Bravo.own_iva_cond][iva_condition]
-      Bravo::ALIC_IVA[index]
+      index && Bravo::ALIC_IVA[index]
     end
 
     def applicable_iva_code

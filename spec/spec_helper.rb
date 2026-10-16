@@ -2,8 +2,10 @@ $:.unshift(File.join(File.dirname(__FILE__), '..', 'lib'))
 require 'bravo'
 require 'rspec'
 require 'vcr'
+require 'webmock/rspec'
+require 'base64'
 
-if ENV['TRAVIS']
+if ENV['CI']
   require 'simplecov'
   SimpleCov.start
 end
@@ -15,12 +17,14 @@ end
 
 VCR.configure do |c|
   c.cassette_library_dir = 'spec/fixtures/vcr_cassettes'
-  c.hook_into :fakeweb
+  c.hook_into :webmock
   c.configure_rspec_metadata!
 end
 
 RSpec.configure do |config|
-  config.treat_symbols_as_metadata_keys_with_true_values = true
+  config.expect_with(:rspec) { |c| c.syntax = [:should, :expect] }
+  config.mock_with(:rspec)   { |c| c.syntax = [:should, :expect] }
+  config.filter_run_excluding :network unless ENV['NETWORK'] == 'true'
   config.filter_run :focus => true
   config.run_all_when_everything_filtered = true
 end
@@ -34,7 +38,6 @@ Bravo.default_documento = 'CUIT'
 Bravo.default_moneda    = :peso
 Bravo.own_iva_cond      = :responsable_inscripto
 Bravo.logger            = { log: ENV['BRAVO_LOG'] == 'true' }
-Bravo.openssl_bin       = ENV['OPENSSL_PATH']
 Bravo::AuthData.environment         = :test
 
 # TODO: refactor into actual validations
@@ -43,7 +46,7 @@ unless Bravo.cuit
 end
 
 [Bravo.pkey, Bravo.cert].each do |file|
-  unless File.exists?("#{ file }")
+  unless File.exist?("#{ file }")
     raise(Bravo::MissingCertificate.new, "No existe #{ file }")
   end
 end

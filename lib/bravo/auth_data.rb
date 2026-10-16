@@ -1,3 +1,7 @@
+require 'tmpdir'
+require 'yaml'
+require 'time'
+
 module Bravo
 
   # This class handles authorization data
@@ -6,27 +10,28 @@ module Bravo
 
     class << self
 
-      attr_accessor :environment, :todays_data_file_name
+      attr_accessor :environment
 
       # Fetches WSAA Authorization Data to build the datafile for the day.
       # It requires the private key file and the certificate to exist and
       # to be configured as Bravo.pkey and Bravo.cert
       #
       def fetch
-        unless File.exists?(Bravo.pkey)
+        unless File.exist?(Bravo.pkey)
           raise "Archivo de llave privada no encontrado en #{ Bravo.pkey }"
         end
 
-        unless File.exists?(Bravo.cert)
+        unless File.exist?(Bravo.cert)
           raise "Archivo certificado no encontrado en #{ Bravo.cert }"
         end
 
-        unless File.exists?(todays_data_file_name)
-          Bravo::Wsaa.login
-        end
+        Bravo::Wsaa.login unless valid_data_file?
 
         YAML.load_file(todays_data_file_name).each do |k, v|
-          Bravo.const_set(k.to_s.upcase, v) unless Bravo.const_defined?(k.to_s.upcase)
+          next if k.to_s == 'expires_at'
+          name = k.to_s.upcase.to_sym
+          Bravo.send(:remove_const, name) if Bravo.const_defined?(name, false)
+          Bravo.const_set(name, v)
         end
       end
 
@@ -34,7 +39,7 @@ module Bravo
       # @return [Hash]
       #
       def auth_hash
-        fetch unless Bravo.constants.include?(:TOKEN) && Bravo.constants.include?(:SIGN)
+        fetch unless Bravo.constants.include?(:TOKEN) && Bravo.constants.include?(:SIGN) && valid_data_file?
         { 'Token' => Bravo::TOKEN, 'Sign'  => Bravo::SIGN, 'Cuit'  => Bravo.cuit }
       end
 
@@ -54,11 +59,20 @@ module Bravo
         Bravo::URLS[environment][:wsfe]
       end
 
-      # Creates the data file name for a cuit number and the current day
+      # Creates the data file name for a cuit number, environment and the current day
       # @return [String]
       #
       def todays_data_file_name
-        @todays_data_file ||= "/tmp/bravo_#{ Bravo.cuit }_#{ Time.new.strftime('%Y_%m_%d') }.yml"
+        File.join(Dir.tmpdir, "bravo_#{ Bravo.cuit }_#{ environment }_#{ Time.new.strftime('%Y_%m_%d') }.yml")
+      end
+
+      # Tells whether the cached token exists and is not about to expire.
+      # @return [Boolean]
+      #
+      def valid_data_file?
+        return false unless File.exist?(todays_data_file_name)
+        expires_at = YAML.load_file(todays_data_file_name)['expires_at']
+        !expires_at.nil? && Time.parse(expires_at.to_s) > Time.now + 60
       end
     end
   end

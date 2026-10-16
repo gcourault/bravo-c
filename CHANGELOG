@@ -1,3 +1,13 @@
+*Unreleased*
+* Added support for Factura/Nota de Débito/Nota de Crédito C (monotributo): no `Iva` node is sent, ImpIVA is 0 and ImpTotal equals ImpNeto
+* Added CondicionIVAReceptorId (RG 5616) to every invoice
+* WSAA login now uses Ruby's OpenSSL and Net::HTTP instead of shelling out to `openssl` and `curl -k` (TLS is verified, no shell interpolation). `Bravo.openssl_bin` is deprecated and ignored
+* Token cache file is now per environment, has 0600 permissions and is renewed when it expires, not only once per day
+* `bravo gencsr` uses Ruby's OpenSSL, generates 2048 bit keys and no longer requires `--bin`
+* Ruby 3.2 compatibility (`File.exist?`), specs moved to RSpec 3, VCR 6 and WebMock
+* Dropped the unused `rack` and `json` runtime dependencies; savon ~> 2.12, thor < 2
+* Fixed octal literals in APPLICABLE_IVA
+
 *Bravo 1.0.0.rc1 (November 25, 2013)*
 * Added full support for Savon logging options
 

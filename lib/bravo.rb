@@ -46,7 +46,7 @@ module Bravo
 
   attr_accessor :cuit, :sale_point, :default_documento, :pkey, :cert,
                 :default_concepto, :default_moneda, :own_iva_cond,
-                :openssl_bin
+                :openssl_bin # deprecated: no longer used, kept so old configs keep working
 
   class << self
     # Receiver of the logging configuration options.
